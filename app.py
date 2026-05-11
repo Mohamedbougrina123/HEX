@@ -8,10 +8,10 @@ BOT_TOKEN = "8658580899:AAGklJayHDFNGVlSRmRr6oC8J6i_YwLRcKA"
 GARENA_URL = "https://100067.connect.garena.com/game/account_security/swap:send_otp"
 
 headers = {
-    'User-Agent': "GarenaMSDK/4.0.41(SM-A065F ;Android 15;ar;MA;app 1.123.1 2019120270;)',
-    'Connection': "Keep-Alive",
-    'Accept': "application/json",
-    'Accept-Encoding': "gzip"
+    'User-Agent': 'GarenaMSDK/4.0.41(SM-A065F ;Android 15;ar;MA;app 1.123.1 2019120270;)',
+    'Connection': 'Keep-Alive',
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip'
 }
 
 def send_request(email, req_id):
@@ -40,29 +40,26 @@ def webhook():
         update = request.get_json()
         if not update or "message" not in update:
             return jsonify({"status": "ok"}), 200
-        
+
         chat_id = update["message"].get("chat", {}).get("id")
         email = update["message"].get("text", "").strip()
-        
+
         if not chat_id:
             return jsonify({"status": "ok"}), 200
-        
+
         if "@" in email and "." in email:
             send_telegram(chat_id, f"جاري ارسال 40 طلب الى {email}...")
-            
             results = []
             with ThreadPoolExecutor(max_workers=40) as executor:
                 futures = [executor.submit(send_request, email, i) for i in range(1, 41)]
                 results = [f.result() for f in futures]
-            
             result_text = "\n".join(results)
             send_telegram(chat_id, f"النتائج:\n\n{result_text}")
-        
+
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         return jsonify({"status": "ok"}), 200
 
-# Vercel handler
 handler = app
 
 if __name__ == "__main__":
