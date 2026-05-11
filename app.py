@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8658580899:AAGklJayHDFNGVlSRmRr6oC8J6i_YwLRcKA"
 GARENA_URL = "https://100067.connect.garena.com/game/account_security/swap:send_otp"
 
 headers = {
