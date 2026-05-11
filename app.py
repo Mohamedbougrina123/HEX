@@ -1,6 +1,6 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -31,25 +31,41 @@ def send_40_requests(email):
 
 def send_telegram(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    for i in range(0, len(text), 4000):
-        requests.post(url, json={"chat_id": chat_id, "text": text[i:i+4000]})
+    try:
+        for i in range(0, len(text), 4000):
+            requests.post(url, json={"chat_id": chat_id, "text": text[i:i+4000]}, timeout=5)
+    except:
+        pass
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running", 200
 
 @app.route(f"/webhook/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-    update = request.get_json()
-    if update and update.get("message"):
-        chat_id = update["message"]["chat"]["id"]
-        text = update["message"].get("text", "")
+    try:
+        update = request.get_json()
+        if not update or "message" not in update:
+            return jsonify({"status": "ok"}), 200
         
-        if "@" in text:
-            email = text.strip()
-            send_telegram(chat_id, f"⏳ جاري إرسال 40 طلباً إلى {email}...")
-            result = send_40_requests(email)
+        chat_id = update["message"].get("chat", {}).get("id")
+        text = update["message"].get("text", "").strip()
+        
+        if not chat_id:
+            return jsonify({"status": "ok"}), 200
+        
+        if "@" in text and "." in text:
+            send_telegram(chat_id, f"⏳ جاري ارسال 40 طلب الى {text}...")
+            result = send_40_requests(text)
             send_telegram(chat_id, f"✅ النتائج:\n\n{result}")
+        elif text == "/start":
+            send_telegram(chat_id, "📧 ارسل الايميل لارسال 40 طلب")
         else:
-            send_telegram(chat_id, "📧 أرسل البريد الإلكتروني فقط مثال: name@gmail.com")
-    
-    return "ok", 200
+            send_telegram(chat_id, "❌ ارسل ايميل صحيح مثال: test@gmail.com")
+        
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        return jsonify({"status": "error"}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
