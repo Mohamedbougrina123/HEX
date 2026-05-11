@@ -18,7 +18,7 @@ def send_request(email, req_id, results, lock):
     try:
         payload = {'app_id': "100067", 'email': email, 'locale': "ar_MA"}
         response = requests.post(GARENA_URL, data=payload, headers=headers, timeout=10)
-        result = f"[{req_id}] {response.status_code}"
+        result = f"[{req_id}] {response.text}"
     except Exception:
         result = f"[{req_id}] خطأ"
     with lock:
