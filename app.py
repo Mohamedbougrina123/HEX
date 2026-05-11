@@ -1,6 +1,6 @@
 import requests
+import threading
 from flask import Flask, request, jsonify
-from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
@@ -14,13 +14,15 @@ headers = {
     'Accept-Encoding': 'gzip'
 }
 
-def send_request(email, req_id):
+def send_request(email, req_id, results, lock):
     try:
         payload = {'app_id': "100067", 'email': email, 'locale': "ar_MA"}
         response = requests.post(GARENA_URL, data=payload, headers=headers, timeout=10)
-        return f"[{req_id}] {response.status_code}"
-    except Exception as e:
-        return f"[{req_id}] خطأ"
+        result = f"[{req_id}] {response.status_code}"
+    except Exception:
+        result = f"[{req_id}] خطأ"
+    with lock:
+        results.append(result)
 
 def send_telegram(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -34,10 +36,10 @@ def send_telegram(chat_id, text):
 def home():
     return "Bot is running", 200
 
-@app.route(f"/webhook/{BOT_TOKEN}", methods=["POST"])
+@app.route("/webhook/" + BOT_TOKEN, methods=["POST"])
 def webhook():
     try:
-        update = request.get_json()
+        update = request.get_json(silent=True)
         if not update or "message" not in update:
             return jsonify({"status": "ok"}), 200
 
@@ -49,15 +51,26 @@ def webhook():
 
         if "@" in email and "." in email:
             send_telegram(chat_id, f"جاري ارسال 40 طلب الى {email}...")
+
             results = []
-            with ThreadPoolExecutor(max_workers=40) as executor:
-                futures = [executor.submit(send_request, email, i) for i in range(1, 41)]
-                results = [f.result() for f in futures]
-            result_text = "\n".join(results)
-            send_telegram(chat_id, f"النتائج:\n\n{result_text}")
+            lock = threading.Lock()
+            threads = []
+
+            for i in range(1, 41):
+                t = threading.Thread(target=send_request, args=(email, i, results, lock))
+                threads.append(t)
+
+            for t in threads:
+                t.start()
+
+            for t in threads:
+                t.join()
+
+            results.sort(key=lambda x: int(x.split("]")[0].replace("[", "")))
+            send_telegram(chat_id, "النتائج:\n\n" + "\n".join(results))
 
         return jsonify({"status": "ok"}), 200
-    except Exception as e:
+    except Exception:
         return jsonify({"status": "ok"}), 200
 
 handler = app
